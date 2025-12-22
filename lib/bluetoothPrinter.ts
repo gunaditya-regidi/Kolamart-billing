@@ -19,12 +19,12 @@ function ensureBrowser() {
 export async function connectPrinter() {
   ensureBrowser();
   // keep backwards compatible: request device and connect
-  device = await (navigator as any).bluetooth.requestDevice({
+  const d = await (navigator as any).bluetooth.requestDevice({
     filters: [{ services: [SERVICE_UUID] }],
     optionalServices: [SERVICE_UUID],
   });
 
-  await connectGattForDevice(device);
+  await connectGattForDevice(d);
 }
 
 async function connectGattForDevice(d: BluetoothDevice) {

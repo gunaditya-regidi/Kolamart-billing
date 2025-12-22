@@ -5,6 +5,10 @@ declare global {
   interface BluetoothRemoteGATTServer {
     connect(): Promise<BluetoothRemoteGATTServer>;
     getPrimaryService(service: string): Promise<BluetoothRemoteGATTService>;
+    /** Whether the server is currently connected */
+    connected: boolean;
+    /** Disconnect the GATT server */
+    disconnect(): void;
   }
 
   interface BluetoothRemoteGATTService {
