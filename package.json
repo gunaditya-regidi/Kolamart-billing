@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "test:script-url": "node scripts/test-script-url.js",
     "lint": "eslint"
   },
   "dependencies": {
