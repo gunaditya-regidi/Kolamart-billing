@@ -1,26 +1,71 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  /* Theme colors requested */
+  --bg: #f6f5c6; /* page background */
+  --accent-dark: #01342b; /* deep green */
+  --accent-blue: #1976d2; /* blue */
+  --accent-red: #e53935; /* red */
+  --text-high: #01342b; /* use deep green for headings/text */
+  --text-muted: #333333;
+  --card-bg: #ffffff;
+  --border: rgba(1,52,43,0.08);
+  --radius: 8px;
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--text-high);
   font-family: Arial, Helvetica, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+/* Basic container */
+.app-container {
+  min-height: 100vh;
+  padding: 12px;
+}
+
+/* Card */
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.06);
+  border: 1px solid var(--border);
+}
+
+/* Buttons */
+.btn {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  font-weight: 700;
+}
+.btn-primary { background: var(--accent-blue); }
+.btn-danger { background: var(--accent-red); }
+.btn-ghost { background: transparent; color: var(--accent-dark); border: 1px solid var(--border); }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+/* Labels and inputs */
+label { color: var(--text-high); font-weight: 600; display:block; margin-bottom:6px; }
+input, select, textarea { width:100%; padding:10px; border-radius:6px; border:1px solid var(--border); margin-bottom:12px; }
+
+/* Header badges */
+.worker-badge { background: var(--accent-dark); color: #fff; padding:6px 12px; border-radius:20px; font-weight:700; }
+
+/* Toasts */
+.toast-wrap { position: fixed; right: 16px; top: 16px; z-index: 9999; display:flex; flex-direction:column; gap:8px; }
+.toast { min-width: 240px; padding:12px 16px; border-radius:8px; color:#fff; box-shadow:0 6px 18px rgba(0,0,0,0.12); }
+.toast.success { background: #2e7d32; }
+.toast.error { background: var(--accent-red); }
+.toast.info { background: var(--accent-blue); }
+
+/* Small helper */
+.hint { font-size: 13px; color: var(--text-muted); }
+

@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -12,6 +12,7 @@ import {
   buildReceipt,
   disconnectPrinter,
 } from '@/lib/bluetoothPrinter';
+import { useToast } from '@/components/ToastProvider';
 
 /* ======================
    ITEM MASTER
@@ -38,6 +39,8 @@ export default function PosPage() {
   const [loading, setLoading] = useState(false);
   const [connectedPrinter, setConnectedPrinter] = useState<any | null>(null);
   const [permittedDevices, setPermittedDevices] = useState<any[]>([]);
+  const [bluetoothAvailable, setBluetoothAvailable] = useState<boolean>(true);
+  const toast = useToast();
 
   /* LOAD WORKER */
   useEffect(() => {
@@ -45,6 +48,17 @@ export default function PosPage() {
     if (!id) router.push('/');
     else setWorkerId(id);
   }, [router]);
+
+  useEffect(() => {
+    // detect Web Bluetooth availability
+    try {
+      const ok = typeof navigator !== 'undefined' && !!(navigator as any).bluetooth && 'requestDevice' in (navigator as any).bluetooth;
+      setBluetoothAvailable(Boolean(ok));
+      if (!ok) toast && toast.show('Web Bluetooth not available in this browser', 'error');
+    } catch {
+      setBluetoothAvailable(false);
+    }
+  }, [toast]);
 
   /* AUTO PRICE */
   useEffect(() => {
@@ -130,26 +144,31 @@ export default function PosPage() {
   }, []);
 
   const handleSelectPrinter = async () => {
+    if (!bluetoothAvailable) {
+      toast?.show('Web Bluetooth is not available on this device/browser', 'error');
+      return;
+    }
+
     try {
       const d = await requestAndSelectPrinter();
       setConnectedPrinter(d as any);
       const list = await getPermittedDevices();
       setPermittedDevices(list as any[]);
-      alert(`Selected printer: ${d.name || d.id}`);
+      toast?.show(`Selected printer: ${d.name || d.id}`, 'success');
     } catch (e) {
       console.error('Printer selection error:', e);
       // Provide clearer feedback to the user depending on the error
       try {
         const err = e as any;
         if (err && (err.name === 'NotFoundError' || err.name === 'AbortError')) {
-          alert('Printer selection was cancelled. No device chosen.');
+          toast?.show('Printer selection was cancelled. No device chosen.', 'info');
         } else if (err && err.message) {
-          alert('Printer selection failed: ' + err.message);
+          toast?.show('Printer selection failed: ' + err.message, 'error');
         } else {
-          alert('Printer selection cancelled or failed');
+          toast?.show('Printer selection cancelled or failed', 'error');
         }
       } catch {
-        alert('Printer selection cancelled or failed');
+        toast?.show('Printer selection cancelled or failed', 'error');
       }
     }
   };
@@ -158,10 +177,10 @@ export default function PosPage() {
     try {
       await disconnectPrinter();
       setConnectedPrinter(null);
-      alert('Printer disconnected');
+      toast?.show('Printer disconnected', 'info');
     } catch (e) {
       console.error(e);
-      alert('Failed to disconnect');
+      toast?.show('Failed to disconnect', 'error');
     }
   };
 
@@ -175,39 +194,96 @@ export default function PosPage() {
       total: payload.price * payload.quantity,
       paymentMode: payload.paymentMode,
     };
-
-    if (!getConnectedDevice()) {
-      const ok = confirm('No printer connected. Select a printer now?');
-      if (!ok) return;
+    // If printer is connected (BLE) try to print via Bluetooth
+    if (getConnectedDevice()) {
       try {
-        await requestAndSelectPrinter();
-      } catch {
+        const text = buildReceipt(orderObj as any);
+        await printReceipt(text);
+        toast?.show('Printed receipt', 'success');
         return;
+      } catch (e) {
+        console.error('Bluetooth print failed:', e);
+        toast?.show('Failed to print via Bluetooth', 'error');
+        // fallthrough to printable fallback
       }
     }
 
+    // Mobile/other fallback: generate a printable HTML receipt and open print dialog
     try {
-      const text = buildReceipt(orderObj as any);
-      await printReceipt(text);
-      alert('Printed receipt');
-    } catch (e) {
-      console.error(e);
-      alert('Failed to print receipt');
+      const printable = `
+        <html>
+          <head>
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>Receipt ${orderObj.orderId}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding:20px; color: #01342b; background: #fff }
+              h1 { text-align:center }
+              .box { max-width:420px; margin:0 auto }
+              .row { display:flex; justify-content:space-between; margin:8px 0 }
+              hr { border:none; border-top:1px dashed #ccc }
+            </style>
+          </head>
+          <body>
+            <div class="box">
+              <h1>KOLAMART</h1>
+              <hr />
+              <div class="row"><strong>Order</strong><span>${orderObj.orderId}</span></div>
+              <div class="row"><strong>SME</strong><span>${orderObj.workerId}</span></div>
+              <hr />
+              <div>${orderObj.item}</div>
+              <div class="row"><span>Qty: ${orderObj.quantity}</span><span>₹ ${orderObj.price}</span></div>
+              <hr />
+              <div class="row"><strong>TOTAL</strong><strong>₹ ${orderObj.total}</strong></div>
+              <div class="row"><span>Payment</span><span>${orderObj.paymentMode}</span></div>
+              <hr />
+              <p style="text-align:center">Thank you! Visit Again</p>
+            </div>
+            <script>window.onload = function(){ setTimeout(()=>{ window.print(); }, 300); }</script>
+          </body>
+        </html>
+      `;
+
+      const w = window.open('', '_blank');
+      if (!w) {
+        // fallback: create a blob and use Web Share or download
+        const blob = new Blob([printable], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: `Receipt ${orderObj.orderId}`, url });
+            toast?.show('Shared receipt', 'success');
+            return;
+          } catch (e) {
+            // ignore share errors
+          }
+        }
+        // open in same tab as last resort
+        window.location.href = url;
+        return;
+      }
+
+      w.document.open();
+      w.document.write(printable);
+      w.document.close();
+      toast?.show('Opened printable receipt. Use browser print to save/send.', 'info');
+      return;
+    } catch (err) {
+      console.error('Printable fallback failed', err);
+      toast?.show('Failed to generate printable receipt', 'error');
+      return;
     }
   }
 
   if (!workerId) return null;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
+    <div className="app-container" style={{display:'flex', alignItems:'center', justifyContent:'center'}}>
+      <div className="card" style={{width:'100%', maxWidth:380}}>
 
         {/* HEADER */}
-        <div style={styles.header}>
-          <span style={styles.workerBadge}>{workerId}</span>
-          <button onClick={changeWorker} style={styles.changeBtn}>
-            Change
-          </button>
+        <div style={{display:'flex',justifyContent:'space-between',marginBottom:16}}>
+          <span className="worker-badge">{workerId}</span>
+          <button onClick={changeWorker} className="btn btn-ghost">Change</button>
         </div>
 
         <label style={styles.label}>Customer Name</label>
@@ -268,10 +344,10 @@ export default function PosPage() {
           </div>
 
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={handleSelectPrinter} style={{ ...styles.primaryBtn, backgroundColor: '#1976d2', padding: '8px 12px', fontSize: 14 }}>
+            <button onClick={handleSelectPrinter} className="btn btn-primary" style={{padding:'8px 12px', fontSize:14}} disabled={!bluetoothAvailable}>
               Select Printer
             </button>
-            <button onClick={handleDisconnectPrinter} style={{ ...styles.primaryBtn, backgroundColor: '#e53935', padding: '8px 12px', fontSize: 14 }} disabled={!connectedPrinter}>
+            <button onClick={handleDisconnectPrinter} className="btn btn-danger" style={{padding:'8px 12px', fontSize:14}} disabled={!connectedPrinter}>
               Disconnect
             </button>
           </div>
@@ -281,15 +357,13 @@ export default function PosPage() {
               Previously allowed devices: {permittedDevices.map(d => d.name || d.id).join(', ')}
             </div>
           )}
+
+          {!bluetoothAvailable && (
+            <div className="hint" style={{marginTop:8}}>Web Bluetooth is not available in this browser/device. Use Chrome on Android or desktop Chromium browsers.</div>
+          )}
         </div>
 
-        <button
-          style={styles.primaryBtn}
-          onClick={saveOrder}
-          disabled={loading}
-        >
-          {loading ? 'Saving...' : 'PRINT & SAVE'}
-        </button>
+        <button className="btn btn-primary" style={{width:'100%'}} onClick={saveOrder} disabled={loading}>{loading ? 'Saving...' : 'PRINT & SAVE'}</button>
 
       </div>
     </div>
