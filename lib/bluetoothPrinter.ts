@@ -172,7 +172,7 @@ export function buildReceipt(order: any) {
 
   // Savings & footer (center)
   receipt += ESC + 'a' + '1';
-  receipt += 'You saved Rs 201/- per rice bag\n';
+  receipt += 'You saved Rs 300/- per rice bag\n';
   receipt += 'Thank you\n';
   receipt += 'Visit Again\n';
 

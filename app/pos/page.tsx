@@ -23,15 +23,9 @@ const ITEMS = {
 };
 
 function formatOrderId(raw: any): string {
+  // Backend already returns IDs like "KM-20251222-0001"
+  // Use it as-is so each order stays unique.
   const s = String(raw ?? '').trim();
-  // Try to extract a numeric part and format as KM-XXXXXXX (7 digits)
-  const numMatch = s.match(/(\d+)/);
-  if (numMatch) {
-    const n = Number(numMatch[1]);
-    if (!Number.isNaN(n)) {
-      return `KM-${String(n).padStart(7, '0')}`;
-    }
-  }
   return s || 'KM-0000001';
 }
 
