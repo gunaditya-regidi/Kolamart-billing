@@ -274,6 +274,70 @@ export default function PosPage() {
     }
   }
 
+  // Generate printable HTML and open print/share dialog (reusable for mobile)
+  async function generatePrintableAndOpen(orderObj: any) {
+    try {
+      const printable = `
+        <html>
+          <head>
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>Receipt ${orderObj.orderId}</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding:20px; color: #01342b; background: #fff }
+              h1 { text-align:center }
+              .box { max-width:420px; margin:0 auto }
+              .row { display:flex; justify-content:space-between; margin:8px 0 }
+              hr { border:none; border-top:1px dashed #ccc }
+            </style>
+          </head>
+          <body>
+            <div class="box">
+              <h1>KOLAMART</h1>
+              <hr />
+              <div class="row"><strong>Order</strong><span>${orderObj.orderId}</span></div>
+              <div class="row"><strong>SME</strong><span>${orderObj.workerId}</span></div>
+              <hr />
+              <div>${orderObj.item}</div>
+              <div class="row"><span>Qty: ${orderObj.quantity}</span><span>₹ ${orderObj.price}</span></div>
+              <hr />
+              <div class="row"><strong>TOTAL</strong><strong>₹ ${orderObj.total}</strong></div>
+              <div class="row"><span>Payment</span><span>${orderObj.paymentMode}</span></div>
+              <hr />
+              <p style="text-align:center">Thank you! Visit Again</p>
+            </div>
+            <script>window.onload = function(){ setTimeout(()=>{ window.print(); }, 300); }</script>
+          </body>
+        </html>
+      `;
+
+      const w = window.open('', '_blank');
+      if (!w) {
+        const blob = new Blob([printable], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        if (navigator.share) {
+          try {
+            await navigator.share({ title: `Receipt ${orderObj.orderId}`, url });
+            toast?.show('Shared receipt', 'success');
+            return;
+          } catch (e) {
+            // ignore
+          }
+        }
+        window.location.href = url;
+        return;
+      }
+
+      w.document.open();
+      w.document.write(printable);
+      w.document.close();
+      toast?.show('Opened printable receipt. Use browser print to save/send.', 'info');
+      return;
+    } catch (err) {
+      console.error('Printable fallback failed', err);
+      toast?.show('Failed to generate printable receipt', 'error');
+    }
+  }
+
   if (!workerId) return null;
 
   return (
@@ -363,7 +427,27 @@ export default function PosPage() {
           )}
         </div>
 
-        <button className="btn btn-primary" style={{width:'100%'}} onClick={saveOrder} disabled={loading}>{loading ? 'Saving...' : 'PRINT & SAVE'}</button>
+        <div style={{display:'flex', gap:8}}>
+          <button className="btn btn-primary" style={{flex:1}} onClick={saveOrder} disabled={loading}>{loading ? 'Saving...' : 'PRINT & SAVE'}</button>
+          <button
+            className="btn btn-ghost"
+            style={{padding:'12px 14px'}}
+            onClick={() => {
+              const orderObj = {
+                orderId: 'DRAFT-' + Date.now(),
+                workerId,
+                item: ITEMS[item].label,
+                quantity,
+                price,
+                total: price * quantity,
+                paymentMode,
+              };
+              generatePrintableAndOpen(orderObj);
+            }}
+          >
+            Print / Share
+          </button>
+        </div>
 
       </div>
     </div>
