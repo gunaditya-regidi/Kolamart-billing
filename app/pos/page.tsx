@@ -5,12 +5,15 @@ import { useRouter } from 'next/navigation';
 import { submitOrder } from '@/lib/sheetApi';
 import {
   requestAndSelectPrinter,
+  requestPrinterWithFallback,
   onDeviceChange,
   getPermittedDevices,
   getConnectedDevice,
+  reconnectPrinter,
   printReceipt,
   buildReceipt,
   disconnectPrinter,
+  isWebBluetoothAvailable,
 } from '@/lib/bluetoothPrinter';
 import { useToast } from '@/components/ToastProvider';
 
@@ -40,6 +43,7 @@ export default function PosPage() {
   const [connectedPrinter, setConnectedPrinter] = useState<any | null>(null);
   const [permittedDevices, setPermittedDevices] = useState<any[]>([]);
   const [bluetoothAvailable, setBluetoothAvailable] = useState<boolean>(true);
+  const [secureContext, setSecureContext] = useState<boolean>(true);
   const toast = useToast();
 
   /* LOAD WORKER */
@@ -50,13 +54,15 @@ export default function PosPage() {
   }, [router]);
 
   useEffect(() => {
-    // detect Web Bluetooth availability
+    // detect Web Bluetooth availability & secure context
     try {
-      const ok = typeof navigator !== 'undefined' && !!(navigator as any).bluetooth && 'requestDevice' in (navigator as any).bluetooth;
+      const ok = isWebBluetoothAvailable();
       setBluetoothAvailable(Boolean(ok));
-      if (!ok) toast && toast.show('Web Bluetooth not available in this browser', 'error');
+      setSecureContext(typeof window !== 'undefined' ? !!(window as any).isSecureContext : true);
+      if (!ok) toast && toast.show('Web Bluetooth not available (use Chrome/Edge on https or localhost)', 'error');
     } catch {
       setBluetoothAvailable(false);
+      setSecureContext(typeof window !== 'undefined' ? !!(window as any).isSecureContext : true);
     }
   }, [toast]);
 
@@ -150,14 +156,13 @@ export default function PosPage() {
     }
 
     try {
-      const d = await requestAndSelectPrinter();
+      const d = await requestPrinterWithFallback();
       setConnectedPrinter(d as any);
       const list = await getPermittedDevices();
       setPermittedDevices(list as any[]);
       toast?.show(`Selected printer: ${d.name || d.id}`, 'success');
     } catch (e) {
       console.error('Printer selection error:', e);
-      // Provide clearer feedback to the user depending on the error
       try {
         const err = e as any;
         if (err && (err.name === 'NotFoundError' || err.name === 'AbortError')) {
@@ -170,6 +175,21 @@ export default function PosPage() {
       } catch {
         toast?.show('Printer selection cancelled or failed', 'error');
       }
+    }
+  };
+
+  const handleReconnectPrinter = async () => {
+    try {
+      const d = await reconnectPrinter();
+      if (d) {
+        setConnectedPrinter(d as any);
+        toast?.show(`Reconnected: ${d.name || d.id}`, 'success');
+      } else {
+        toast?.show('No known printer to reconnect', 'info');
+      }
+    } catch (e) {
+      console.error(e);
+      toast?.show('Failed to reconnect', 'error');
     }
   };
 
@@ -209,6 +229,7 @@ export default function PosPage() {
     }
 
     // Mobile/other fallback: generate a printable HTML receipt and open print dialog
+  
     try {
       const printable = `
         <html>
@@ -245,7 +266,6 @@ export default function PosPage() {
 
       const w = window.open('', '_blank');
       if (!w) {
-        // fallback: create a blob and use Web Share or download
         const blob = new Blob([printable], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         if (navigator.share) {
@@ -254,10 +274,9 @@ export default function PosPage() {
             toast?.show('Shared receipt', 'success');
             return;
           } catch (e) {
-            // ignore share errors
+            // ignore
           }
         }
-        // open in same tab as last resort
         window.location.href = url;
         return;
       }
@@ -270,7 +289,6 @@ export default function PosPage() {
     } catch (err) {
       console.error('Printable fallback failed', err);
       toast?.show('Failed to generate printable receipt', 'error');
-      return;
     }
   }
 
@@ -350,6 +368,10 @@ export default function PosPage() {
           <button onClick={changeWorker} className="btn btn-ghost">Change</button>
         </div>
 
+        {!secureContext && (
+          <div className="hint" style={{marginBottom:8}}>Web Bluetooth requires https or localhost. Please open in a secure context.</div>
+        )}
+
         <label style={styles.label}>Customer Name</label>
         <input
           value={customerName}
@@ -410,6 +432,9 @@ export default function PosPage() {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={handleSelectPrinter} className="btn btn-primary" style={{padding:'8px 12px', fontSize:14}} disabled={!bluetoothAvailable}>
               Select Printer
+            </button>
+            <button onClick={handleReconnectPrinter} className="btn btn-primary" style={{padding:'8px 12px', fontSize:14}} disabled={!bluetoothAvailable}>
+              Reconnect
             </button>
             <button onClick={handleDisconnectPrinter} className="btn btn-danger" style={{padding:'8px 12px', fontSize:14}} disabled={!connectedPrinter}>
               Disconnect

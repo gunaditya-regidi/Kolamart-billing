@@ -7,12 +7,24 @@ const deviceChangeListeners = new Set<(d: BluetoothDevice | null) => void>();
 const SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb';
 const CHAR_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
 
+export function isWebBluetoothAvailable(): boolean {
+  return (
+    typeof navigator !== 'undefined' &&
+    typeof window !== 'undefined' &&
+    'bluetooth' in navigator &&
+    (window as any).isSecureContext !== false
+  );
+}
+
 function ensureBrowser() {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') {
     throw new Error('Bluetooth functions can only be used in the browser');
   }
   if (!('bluetooth' in navigator)) {
     throw new Error('Web Bluetooth API is not available in this browser');
+  }
+  if (!(window as any).isSecureContext) {
+    throw new Error('Secure context required (https or localhost) for Web Bluetooth');
   }
 }
 
@@ -61,10 +73,12 @@ export async function printReceipt(text: string) {
   const encoder = new TextEncoder();
   const data = encoder.encode(text);
 
-  for (let i = 0; i < data.length; i += 20) {
-    const chunk = data.slice(i, i + 20);
+  const CHUNK = 20;
+  const DELAY_MS = 30;
+  for (let i = 0; i < data.length; i += CHUNK) {
+    const chunk = data.slice(i, i + CHUNK);
     await characteristic.writeValue(chunk as BufferSource);
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, DELAY_MS));
   }
 }
 
@@ -100,6 +114,26 @@ export async function requestAndSelectPrinter(): Promise<BluetoothDevice> {
   return d;
 }
 
+export async function requestPrinterWithFallback(): Promise<BluetoothDevice> {
+  ensureBrowser();
+  try {
+    const d = await (navigator as any).bluetooth.requestDevice({
+      filters: [{ services: [SERVICE_UUID] }],
+      optionalServices: [SERVICE_UUID],
+    });
+    await connectGattForDevice(d);
+    return d;
+  } catch (e: any) {
+    // Fallback: accept all devices, then try to connect
+    const d = await (navigator as any).bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: [SERVICE_UUID],
+    });
+    await connectGattForDevice(d);
+    return d;
+  }
+}
+
 export async function getPermittedDevices(): Promise<BluetoothDevice[]> {
   ensureBrowser();
   if ((navigator as any).bluetooth.getDevices) {
@@ -111,4 +145,28 @@ export async function getPermittedDevices(): Promise<BluetoothDevice[]> {
     }
   }
   return device ? [device] : [];
+}
+
+export async function reconnectPrinter(): Promise<BluetoothDevice | null> {
+  try {
+    ensureBrowser();
+    // If we still have a reference, try reconnecting
+    if (device && device.gatt) {
+      if (!device.gatt.connected) {
+        await device.gatt.connect();
+        await connectGattForDevice(device);
+      }
+      return device;
+    }
+
+    // Otherwise, try permitted devices (if supported)
+    const list = await getPermittedDevices();
+    if (list && list[0]) {
+      await connectGattForDevice(list[0]);
+      return list[0];
+    }
+  } catch {
+    // swallow to allow client-side handling
+  }
+  return null;
 }
