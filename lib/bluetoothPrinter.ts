@@ -72,14 +72,7 @@ export async function printReceipt(text: string) {
 
   const encoder = new TextEncoder();
   const data = encoder.encode(text);
-
-  const CHUNK = 20;
-  const DELAY_MS = 30;
-  for (let i = 0; i < data.length; i += CHUNK) {
-    const chunk = data.slice(i, i + CHUNK);
-    await characteristic.writeValue(chunk as BufferSource);
-    await new Promise((r) => setTimeout(r, DELAY_MS));
-  }
+  await writeChunks(data);
 }
 
 export function buildReceipt(order: any) {
@@ -96,7 +89,7 @@ export function buildReceipt(order: any) {
   const divider = '-'.repeat(LINE_WIDTH);
 
   const companyName = (order.companyName || 'KOLAMART').toString();
-  const gstNumber = (order.gstNumber || '<GST_NUMBER>').toString();
+  const workerId = (order.workerId || '').toString();
   const customerName = (order.customerName || '').toString();
   const customerPhone = (order.customerPhone || '').toString();
   const itemName = (order.item || '').toString();
@@ -128,7 +121,7 @@ export function buildReceipt(order: any) {
     '|' +
     padRight(quantity, COL_QTY) +
     '|' +
-    padLeft(`₹${price}`, COL_PRICE) +
+    padLeft(`Rs ${price}`, COL_PRICE) +
     '|';
 
   let receipt = '';
@@ -141,14 +134,17 @@ export function buildReceipt(order: any) {
 
   // Normal size but keep header center-aligned
   receipt += GS + '!' + '\x00';
-  receipt += `GST No:  37AALCK4778K1ZQ\n`;
+  receipt += `GST No: 37AALCK4778K1ZQ\n`;
   receipt +=
     '9-2-18, Pithapuram Colony, Maddilapalem, Visakhapatnam, Andhra Pradesh 530013\n';
-  receipt += 'Customer Care: 9848418582, 8374522989\n';
+  receipt += 'Customer Care: 9848418582\n';
   receipt += divider + '\n';
 
-  // Customer details (left)
+  // Worker & customer details (left)
   receipt += ESC + 'a' + '0';
+  if (workerId) {
+    receipt += `Worker ID    : ${workerId}\n`;
+  }
   receipt += `Customer Name: ${customerName}\n`;
   receipt += `Phone        : ${customerPhone}\n`;
   receipt += divider + '\n';
@@ -162,7 +158,7 @@ export function buildReceipt(order: any) {
 
   // Total section (bold)
   receipt += ESC + 'E' + '\x01';
-  receipt += `TOTAL AMOUNT: ₹${total}\n`;
+  receipt += `TOTAL AMOUNT: Rs ${total}\n`;
   receipt += ESC + 'E' + '\x00';
 
   // Payment details
@@ -171,14 +167,106 @@ export function buildReceipt(order: any) {
 
   // Savings & footer (center)
   receipt += ESC + 'a' + '1';
-  receipt += 'You saved ₹201/- per rice bag\n';
+  receipt += 'You saved Rs 201/- per rice bag\n';
   receipt += 'Thank you\n';
-  receipt += 'Visit Again 🙏\n\n';
+  receipt += 'Visit Again\n';
 
-  // Full cut
-  receipt += GS + 'V' + '\x01';
+  // Feed exactly 2 extra blank lines after the footer, then stop (no cut)
+  receipt += ESC + 'd' + '\x02';
 
   return receipt;
+}
+
+async function writeChunks(data: Uint8Array) {
+  if (!characteristic) throw new Error('Printer not connected');
+
+  const CHUNK = 20;
+  const DELAY_MS = 30;
+  for (let i = 0; i < data.length; i += CHUNK) {
+    const chunk = data.slice(i, i + CHUNK);
+    await characteristic.writeValue(chunk as BufferSource);
+    await new Promise((r) => setTimeout(r, DELAY_MS));
+  }
+}
+
+/**
+ * Print a logo image from a public URL (e.g. '/logo.png') above the receipt.
+ * Image is converted to a black & white bitmap and sent using ESC/POS raster mode.
+ */
+export async function printLogoFromUrl(url: string) {
+  ensureBrowser();
+  if (!characteristic) throw new Error('Printer not connected');
+
+  // Load image
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = (e) => reject(e);
+    image.src = url;
+  });
+
+  // Render to canvas and convert to monochrome
+  const canvas = document.createElement('canvas');
+  // Most 58mm printers are ~384px wide
+  const MAX_WIDTH = 384;
+  const scale = Math.min(1, MAX_WIDTH / img.width);
+  const width = Math.floor(img.width * scale);
+  const height = Math.floor(img.height * scale);
+  canvas.width = width;
+  canvas.height = height;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  ctx.drawImage(img, 0, 0, width, height);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const pixels = imageData.data;
+
+  const bytesPerRow = Math.ceil(width / 8);
+  const data = new Uint8Array(8 + bytesPerRow * height);
+
+  // ESC/POS raster bit image header: GS v 0
+  const GS = 0x1d;
+  const m = 0x00; // normal
+  const xL = bytesPerRow & 0xff;
+  const xH = (bytesPerRow >> 8) & 0xff;
+  const yL = height & 0xff;
+  const yH = (height >> 8) & 0xff;
+
+  data[0] = GS;
+  data[1] = 0x76; // 'v'
+  data[2] = 0x30; // '0'
+  data[3] = m;
+  data[4] = xL;
+  data[5] = xH;
+  data[6] = yL;
+  data[7] = yH;
+
+  let offset = 8;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < bytesPerRow; x++) {
+      let byte = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        const pixelX = x * 8 + bit;
+        if (pixelX >= width) continue;
+        const idx = (y * width + pixelX) * 4;
+        const r = pixels[idx];
+        const g = pixels[idx + 1];
+        const b = pixels[idx + 2];
+        // Simple luminance threshold
+        const v = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (v < 128) {
+          byte |= 0x80 >> bit;
+        }
+      }
+      data[offset++] = byte;
+    }
+  }
+
+  await writeChunks(data);
+  // Line break after logo
+  await writeChunks(new TextEncoder().encode('\n'));
 }
 
 function notifyDeviceChange() {

@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { submitOrder } from '@/lib/sheetApi';
 import {
-  requestAndSelectPrinter,
   requestPrinterWithFallback,
   onDeviceChange,
   getPermittedDevices,
@@ -14,7 +13,6 @@ import {
   buildReceipt,
   disconnectPrinter,
   isWebBluetoothAvailable,
-  connectPrinter,
 } from '@/lib/bluetoothPrinter';
 import { useToast } from '@/components/ToastProvider';
 
@@ -169,10 +167,9 @@ export default function PosPage() {
     }
 
     try {
+      // Request device and connect in a single user-gesture-friendly call
       const d = await requestPrinterWithFallback();
-      await connectPrinter(d as any);
-      const connected = getConnectedDevice();
-      setConnectedPrinter((connected || d) as any);
+      setConnectedPrinter(d as any);
       const list = await getPermittedDevices();
       setPermittedDevices(list as any[]);
       toast?.show(`Connected to printer: ${d.name || d.id}`, 'success');
@@ -221,6 +218,8 @@ export default function PosPage() {
     const orderObj = {
       orderId,
       workerId: payload.workerId,
+      customerName: payload.customerName,
+      customerPhone: payload.phone,
       item: payload.item,
       quantity: payload.quantity,
       price: payload.price,
