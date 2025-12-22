@@ -14,6 +14,7 @@ import {
   buildReceipt,
   disconnectPrinter,
   isWebBluetoothAvailable,
+  connectPrinter,
 } from '@/lib/bluetoothPrinter';
 import { useToast } from '@/components/ToastProvider';
 
@@ -133,19 +134,31 @@ export default function PosPage() {
     const unsub = onDeviceChange((d) => {
       setConnectedPrinter(d as any || null);
     });
-
+  
     // initial permitted devices (if browser supports)
     (async () => {
       try {
         const list = await getPermittedDevices();
         setPermittedDevices(list as any[]);
         const cd = getConnectedDevice();
-        if (cd) setConnectedPrinter(cd as any);
+        if (cd) {
+          setConnectedPrinter(cd as any);
+        } else if (list && list.length) {
+          try {
+            const d = await reconnectPrinter();
+            if (d) {
+              setConnectedPrinter(d as any);
+              toast?.show(`Reconnected: ${d.name || d.id}`, 'success');
+            }
+          } catch {
+            // ignore reconnect errors
+          }
+        }
       } catch {
         // ignore
       }
     })();
-
+  
     return () => { unsub(); };
   }, []);
 
@@ -157,22 +170,22 @@ export default function PosPage() {
 
     try {
       const d = await requestPrinterWithFallback();
-      setConnectedPrinter(d as any);
+      await connectPrinter(d as any);
+      const connected = getConnectedDevice();
+      setConnectedPrinter((connected || d) as any);
       const list = await getPermittedDevices();
       setPermittedDevices(list as any[]);
-      toast?.show(`Selected printer: ${d.name || d.id}`, 'success');
+      toast?.show(`Connected to printer: ${d.name || d.id}`, 'success');
     } catch (e) {
-      console.error('Printer selection error:', e);
-      try {
-        const err = e as any;
-        if (err && (err.name === 'NotFoundError' || err.name === 'AbortError')) {
-          toast?.show('Printer selection was cancelled. No device chosen.', 'info');
-        } else if (err && err.message) {
-          toast?.show('Printer selection failed: ' + err.message, 'error');
-        } else {
-          toast?.show('Printer selection cancelled or failed', 'error');
-        }
-      } catch {
+      const err = e as any;
+      if (err && (err.name === 'NotFoundError' || err.name === 'AbortError')) {
+        console.info('User cancelled device selection');
+        toast?.show('Printer selection was cancelled. No device chosen.', 'info');
+      } else if (err && err.message) {
+        console.error('Printer selection failed:', err);
+        toast?.show('Printer selection failed: ' + err.message, 'error');
+      } else {
+        console.error('Printer selection failed:', err);
         toast?.show('Printer selection cancelled or failed', 'error');
       }
     }
