@@ -16,9 +16,6 @@ import {
 } from '@/lib/bluetoothPrinter';
 import { useToast } from '@/components/ToastProvider';
 
-/* ======================
-   ITEM MASTER
-   ====================== */
 const ITEMS = {
   RICE_26KG: { label: 'Rice 26 KG', price: 1499 },
   TOOR_DAL_500G: { label: 'Toor Dal 1/2 KG', price: 65 },
