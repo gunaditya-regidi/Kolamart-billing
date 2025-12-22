@@ -9,6 +9,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'Missing script URL' }, { status: 500 });
   }
 
+  // Quick validation: if the URL contains '/edit' or appears to be the Apps Script editor
+  // it will return HTML (the editor page) instead of the deployed web app JSON. Give
+  // a helpful error so users set the correct deployed web app URL in env.
+  if (SCRIPT_URL.includes('/edit') || SCRIPT_URL.includes('/u/0/home/projects')) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          'Script URL appears to be the Apps Script editor URL. Set NEXT_PUBLIC_SHEET_SCRIPT_URL to the deployed web app URL (the "web app" exec URL), not the editor /edit URL.',
+      },
+      { status: 400 }
+    );
+  }
+
   try {
     const body = await req.json();
 
