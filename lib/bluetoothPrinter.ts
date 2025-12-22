@@ -137,7 +137,7 @@ export function buildReceipt(order: any) {
   receipt += GS + '!' + '\x00';
   receipt += `GST No: 37AALCK4778K1ZQ\n`;
   receipt +=
-    '13/1, MIG Vuda Flats Pithapuram Colony, Visakhapatnam, Andhra Pradesh 530003\n';
+    '13/1, MIG Vuda Flats Pithapuram Colony, Visakhapatnam, \n Andhra Pradesh, India - 530003\n';
   receipt += 'Customer Care: 9848418582\n';
   receipt += divider + '\n';
 
