@@ -22,6 +22,19 @@ const ITEMS = {
   SUGAR_1KG: { label: 'Sugar 1 KG', price: 55 },
 };
 
+function formatOrderId(raw: any): string {
+  const s = String(raw ?? '').trim();
+  // Try to extract a numeric part and format as KM-XXX
+  const numMatch = s.match(/(\d+)/);
+  if (numMatch) {
+    const n = Number(numMatch[1]);
+    if (!Number.isNaN(n)) {
+      return `KM-${String(n).padStart(3, '0')}`;
+    }
+  }
+  return s || 'KM-001';
+}
+
 export default function PosPage() {
   const router = useRouter();
 
@@ -100,10 +113,11 @@ export default function PosPage() {
       const result = await submitOrder(payload);
 
       if (result.success) {
-        alert(`Order Saved\nOrder ID: ${result.orderId}`);
+        const displayId = formatOrderId(result.orderId);
+        alert(`Order Saved\nOrder ID: ${displayId}`);
 
         // Print the saved order (use payload + server orderId)
-        await tryPrintReceipt(result.orderId as string, payload);
+        await tryPrintReceipt(displayId, payload);
 
         // Reset form after printing
         setCustomerName('');
@@ -251,6 +265,7 @@ export default function PosPage() {
 
     const companyName = 'KOLAMART';
     const gstNumber = '37AALCK4778K1ZQ';
+    const orderIdLocal = (orderObj.orderId || '').toString();
     const workerIdLocal = (orderObj.workerId || '').toString();
     const customerNameLocal = (orderObj.customerName || '').toString();
     const customerPhoneLocal = (orderObj.customerPhone || '').toString();
@@ -289,9 +304,12 @@ export default function PosPage() {
     text += companyName + '\n';
     text += `GST No: ${gstNumber}\n`;
     text +=
-      '9-2-18, Pithapuram Colony, Maddilapalem, Visakhapatnam, Andhra Pradesh 530013\n';
+      '13/1, MIG Vuda Flats Pithapuram Colony, Visakhapatnam, Andhra Pradesh 530003\n';
     text += 'Customer Care: 9848418582\n';
     text += divider + '\n';
+    if (orderIdLocal) {
+      text += `Order ID    : ${orderIdLocal}\n`;
+    }
     if (workerIdLocal) {
       text += `Worker ID    : ${workerIdLocal}\n`;
     }
@@ -474,6 +492,8 @@ export default function PosPage() {
               const orderObj = {
                 orderId: 'DRAFT-' + Date.now(),
                 workerId,
+                customerName,
+                customerPhone: phone,
                 item: ITEMS[item].label,
                 quantity,
                 price,
