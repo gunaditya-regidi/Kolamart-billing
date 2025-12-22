@@ -164,7 +164,7 @@ export default function PosPage() {
     }
 
     try {
-      // Request device and connect in a single user-gesture-friendly call
+    
       const d = await requestPrinterWithFallback();
       setConnectedPrinter(d as any);
       const list = await getPermittedDevices();
@@ -223,7 +223,6 @@ export default function PosPage() {
       total: payload.price * payload.quantity,
       paymentMode: payload.paymentMode,
     };
-    // If printer is connected (BLE) try to print via Bluetooth
     if (getConnectedDevice()) {
       try {
         const text = buildReceipt(orderObj as any);
@@ -233,76 +232,97 @@ export default function PosPage() {
       } catch (e) {
         console.error('Bluetooth print failed:', e);
         toast?.show('Failed to print via Bluetooth', 'error');
-        // fallthrough to printable fallback
       }
     }
 
-    // Mobile/other fallback: generate a printable HTML receipt and open print dialog
-  
-    try {
-      const printable = `
-        <html>
-          <head>
-            <meta name="viewport" content="width=device-width,initial-scale=1">
-            <title>Receipt ${orderObj.orderId}</title>
-            <style>
-              body { font-family: Arial, sans-serif; padding:20px; color: #01342b; background: #fff }
-              h1 { text-align:center }
-              .box { max-width:420px; margin:0 auto }
-              .row { display:flex; justify-content:space-between; margin:8px 0 }
-              hr { border:none; border-top:1px dashed #ccc }
-            </style>
-          </head>
-          <body>
-            <div class="box">
-              <h1>KOLAMART</h1>
-              <hr />
-              <div class="row"><strong>Order</strong><span>${orderObj.orderId}</span></div>
-              <div class="row"><strong>SME</strong><span>${orderObj.workerId}</span></div>
-              <hr />
-              <div>${orderObj.item}</div>
-              <div class="row"><span>Qty: ${orderObj.quantity}</span><span>₹ ${orderObj.price}</span></div>
-              <hr />
-              <div class="row"><strong>TOTAL</strong><strong>₹ ${orderObj.total}</strong></div>
-              <div class="row"><span>Payment</span><span>${orderObj.paymentMode}</span></div>
-              <hr />
-              <p style="text-align:center">Thank you! Visit Again</p>
-            </div>
-            <script>window.onload = function(){ setTimeout(()=>{ window.print(); }, 300); }</script>
-          </body>
-        </html>
-      `;
+    await generatePrintableAndOpen(orderObj);
+  }
 
-      const w = window.open('', '_blank');
-      if (!w) {
-        const blob = new Blob([printable], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        if (navigator.share) {
-          try {
-            await navigator.share({ title: `Receipt ${orderObj.orderId}`, url });
-            toast?.show('Shared receipt', 'success');
-            return;
-          } catch (e) {
-            // ignore
-          }
-        }
-        window.location.href = url;
-        return;
-      }
+  function buildPrintableReceiptText(orderObj: any) {
+    const LINE_WIDTH = 32;
 
-      w.document.open();
-      w.document.write(printable);
-      w.document.close();
-      toast?.show('Opened printable receipt. Use browser print to save/send.', 'info');
-      return;
-    } catch (err) {
-      console.error('Printable fallback failed', err);
-      toast?.show('Failed to generate printable receipt', 'error');
+    const padRight = (text: string, length: number) =>
+      text.length > length ? text.slice(0, length) : text + ' '.repeat(length - text.length);
+
+    const padLeft = (text: string, length: number) =>
+      text.length > length ? text.slice(0, length) : ' '.repeat(length - text.length) + text;
+
+    const divider = '-'.repeat(LINE_WIDTH);
+
+    const companyName = 'KOLAMART';
+    const gstNumber = '37AALCK4778K1ZQ';
+    const workerIdLocal = (orderObj.workerId || '').toString();
+    const customerNameLocal = (orderObj.customerName || '').toString();
+    const customerPhoneLocal = (orderObj.customerPhone || '').toString();
+    const itemName = (orderObj.item || '').toString();
+    const quantity = (orderObj.quantity ?? '').toString();
+    const price = (orderObj.price ?? '').toString();
+    const total = (orderObj.total ?? '').toString();
+    const paymentModeLocal = (orderObj.paymentMode || '').toString();
+
+    const COL_ITEM = 16;
+    const COL_QTY = 3;
+    const COL_PRICE = 9;
+
+    const headerBorder =
+      '+' + '-'.repeat(COL_ITEM) + '+' + '-'.repeat(COL_QTY) + '+' + '-'.repeat(COL_PRICE) + '+';
+
+    const tableHeader =
+      '|' +
+      padRight('ITEM', COL_ITEM) +
+      '|' +
+      padRight('QTY', COL_QTY) +
+      '|' +
+      padRight('PRICE', COL_PRICE) +
+      '|';
+
+    const itemRow =
+      '|' +
+      padRight(itemName, COL_ITEM) +
+      '|' +
+      padRight(quantity, COL_QTY) +
+      '|' +
+      padLeft(`Rs ${price}`, COL_PRICE) +
+      '|';
+
+    let text = '';
+    text += companyName + '\n';
+    text += `GST No: ${gstNumber}\n`;
+    text +=
+      '9-2-18, Pithapuram Colony, Maddilapalem, Visakhapatnam, Andhra Pradesh 530013\n';
+    text += 'Customer Care: 9848418582\n';
+    text += divider + '\n';
+    if (workerIdLocal) {
+      text += `Worker ID    : ${workerIdLocal}\n`;
     }
+    text += `Customer Name: ${customerNameLocal}\n`;
+    text += `Phone        : ${customerPhoneLocal}\n`;
+    text += divider + '\n';
+    text += headerBorder + '\n';
+    text += tableHeader + '\n';
+    text += headerBorder + '\n';
+    text += itemRow + '\n';
+    text += headerBorder + '\n';
+    text += `TOTAL AMOUNT: Rs ${total}\n`;
+    text += `Payment Mode: ${paymentModeLocal}\n`;
+    text += divider + '\n';
+    text += 'You saved Rs 201/- per rice bag\n';
+    text += 'Thank you\n';
+    text += 'Visit Again\n';
+
+    return text;
   }
 
   // Generate printable HTML and open print/share dialog (reusable for mobile)
   async function generatePrintableAndOpen(orderObj: any) {
+    const escHtml = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+    const receiptText = buildPrintableReceiptText(orderObj);
+
     try {
       const printable = `
         <html>
@@ -310,28 +330,12 @@ export default function PosPage() {
             <meta name="viewport" content="width=device-width,initial-scale=1">
             <title>Receipt ${orderObj.orderId}</title>
             <style>
-              body { font-family: Arial, sans-serif; padding:20px; color: #01342b; background: #fff }
-              h1 { text-align:center }
-              .box { max-width:420px; margin:0 auto }
-              .row { display:flex; justify-content:space-between; margin:8px 0 }
-              hr { border:none; border-top:1px dashed #ccc }
+              body { font-family: monospace; padding:16px; color:#000; background:#fff }
+              pre { font-size:12px; line-height:1.4; white-space:pre; }
             </style>
           </head>
           <body>
-            <div class="box">
-              <h1>KOLAMART</h1>
-              <hr />
-              <div class="row"><strong>Order</strong><span>${orderObj.orderId}</span></div>
-              <div class="row"><strong>SME</strong><span>${orderObj.workerId}</span></div>
-              <hr />
-              <div>${orderObj.item}</div>
-              <div class="row"><span>Qty: ${orderObj.quantity}</span><span>₹ ${orderObj.price}</span></div>
-              <hr />
-              <div class="row"><strong>TOTAL</strong><strong>₹ ${orderObj.total}</strong></div>
-              <div class="row"><span>Payment</span><span>${orderObj.paymentMode}</span></div>
-              <hr />
-              <p style="text-align:center">Thank you! Visit Again</p>
-            </div>
+            <pre>${escHtml(receiptText)}</pre>
             <script>window.onload = function(){ setTimeout(()=>{ window.print(); }, 300); }</script>
           </body>
         </html>
