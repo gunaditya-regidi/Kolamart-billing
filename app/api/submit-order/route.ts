@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const DEFAULT_SCRIPT_URL =
-  'https://script.google.com/u/0/home/projects/1J8JsOqwshQGMAbevl8mXQOBzTQq4xOV3RWSorZkCXId3Z8O5Rvy_oP8e/edit';
-
 export async function POST(req: NextRequest) {
-  const SCRIPT_URL = process.env.NEXT_PUBLIC_SHEET_SCRIPT_URL || DEFAULT_SCRIPT_URL;
+  const SCRIPT_URL = process.env.NEXT_PUBLIC_SHEET_SCRIPT_URL;
   if (!SCRIPT_URL) {
-    return NextResponse.json({ success: false, error: 'Missing script URL' }, { status: 500 });
+    console.error('submit-order: NEXT_PUBLIC_SHEET_SCRIPT_URL is not set');
+    return NextResponse.json(
+      { success: false, error: 'Missing NEXT_PUBLIC_SHEET_SCRIPT_URL environment variable on the server.' },
+      { status: 500 }
+    );
   }
 
   // Quick validation: if the URL contains '/edit' or appears to be the Apps Script editor
