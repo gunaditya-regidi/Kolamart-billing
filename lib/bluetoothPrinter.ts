@@ -1,3 +1,5 @@
+/// <reference path="../types/web-bluetooth.d.ts" />
+
 let device: BluetoothDevice | null = null;
 let characteristic: BluetoothRemoteGATTCharacteristic | null = null;
 const deviceChangeListeners = new Set<(d: BluetoothDevice | null) => void>();
