@@ -4,7 +4,7 @@ const DEFAULT_SCRIPT_URL =
   'https://script.google.com/u/0/home/projects/1J8JsOqwshQGMAbevl8mXQOBzTQq4xOV3RWSorZkCXId3Z8O5Rvy_oP8e/edit';
 
 export async function POST(req: NextRequest) {
-  const SCRIPT_URL = process.env.EXT_PUBLIC_SHEET_SCRIPT_URL || DEFAULT_SCRIPT_URL;
+  const SCRIPT_URL = process.env.NEXT_PUBLIC_SHEET_SCRIPT_URL || DEFAULT_SCRIPT_URL;
   if (!SCRIPT_URL) {
     return NextResponse.json({ success: false, error: 'Missing script URL' }, { status: 500 });
   }
