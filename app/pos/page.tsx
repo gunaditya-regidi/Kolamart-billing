@@ -24,15 +24,15 @@ const ITEMS = {
 
 function formatOrderId(raw: any): string {
   const s = String(raw ?? '').trim();
-  // Try to extract a numeric part and format as KM-XXX
+  // Try to extract a numeric part and format as KM-XXXXXXX (7 digits)
   const numMatch = s.match(/(\d+)/);
   if (numMatch) {
     const n = Number(numMatch[1]);
     if (!Number.isNaN(n)) {
-      return `KM-${String(n).padStart(3, '0')}`;
+      return `KM-${String(n).padStart(7, '0')}`;
     }
   }
-  return s || 'KM-001';
+  return s || 'KM-0000001';
 }
 
 export default function PosPage() {

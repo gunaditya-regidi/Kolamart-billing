@@ -89,6 +89,7 @@ export function buildReceipt(order: any) {
   const divider = '-'.repeat(LINE_WIDTH);
 
   const companyName = (order.companyName || 'KOLAMART').toString();
+  const orderId = (order.orderId || '').toString();
   const workerId = (order.workerId || '').toString();
   const customerName = (order.customerName || '').toString();
   const customerPhone = (order.customerPhone || '').toString();
@@ -136,15 +137,19 @@ export function buildReceipt(order: any) {
   receipt += GS + '!' + '\x00';
   receipt += `GST No: 37AALCK4778K1ZQ\n`;
   receipt +=
-    '9-2-18, Pithapuram Colony, Maddilapalem, Visakhapatnam, Andhra Pradesh 530013\n';
+    '13/1, MIG Vuda Flats Pithapuram Colony, Visakhapatnam, Andhra Pradesh 530003\n';
   receipt += 'Customer Care: 9848418582\n';
   receipt += divider + '\n';
 
   // Worker & customer details (left)
   receipt += ESC + 'a' + '0';
+  if (orderId) {
+    receipt += `Order ID    : ${orderId}\n`;
+  }
   if (workerId) {
     receipt += `Worker ID    : ${workerId}\n`;
   }
+  
   receipt += `Customer Name: ${customerName}\n`;
   receipt += `Phone        : ${customerPhone}\n`;
   receipt += divider + '\n';
