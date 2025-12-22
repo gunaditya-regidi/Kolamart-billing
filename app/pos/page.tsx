@@ -137,8 +137,20 @@ export default function PosPage() {
       setPermittedDevices(list as any[]);
       alert(`Selected printer: ${d.name || d.id}`);
     } catch (e) {
-      console.error(e);
-      alert('Printer selection cancelled or failed');
+      console.error('Printer selection error:', e);
+      // Provide clearer feedback to the user depending on the error
+      try {
+        const err = e as any;
+        if (err && (err.name === 'NotFoundError' || err.name === 'AbortError')) {
+          alert('Printer selection was cancelled. No device chosen.');
+        } else if (err && err.message) {
+          alert('Printer selection failed: ' + err.message);
+        } else {
+          alert('Printer selection cancelled or failed');
+        }
+      } catch {
+        alert('Printer selection cancelled or failed');
+      }
     }
   };
 
