@@ -126,7 +126,7 @@ export default function PosPage() {
       }
     })();
 
-    return () => unsub();
+    return () => { unsub(); };
   }, []);
 
   const handleSelectPrinter = async () => {
