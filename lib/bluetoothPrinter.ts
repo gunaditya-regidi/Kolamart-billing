@@ -98,6 +98,19 @@ export function buildReceipt(order: any) {
   const price = (order.price ?? '').toString();
   const total = (order.total ?? '').toString();
   const paymentMode = (order.paymentMode || '').toString();
+  
+  // Format date - use order date if provided, otherwise use current date
+  const orderDate = order.date ? new Date(order.date) : new Date();
+  const formattedDate = orderDate.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+  const formattedTime = orderDate.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  });
 
   // Table column widths for 32-char line: 1+16+1+3+1+9+1 = 32
   const COL_ITEM = 16;
@@ -143,6 +156,8 @@ export function buildReceipt(order: any) {
 
   // Worker & customer details (left)
   receipt += ESC + 'a' + '0';
+  receipt += `Date        : ${formattedDate}\n`;
+  receipt += `Time        : ${formattedTime}\n`;
   if (orderId) {
     receipt += `Order ID    : ${orderId}\n`;
   }
