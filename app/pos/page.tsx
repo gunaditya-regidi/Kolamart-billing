@@ -575,6 +575,7 @@ export default function PosPage() {
         >
           <option value="Cash">Cash</option>
           <option value="UPI">UPI</option>
+          <option value="COD">COD</option>
         </select>
 
         <div style={{ marginBottom: 12 }}>
