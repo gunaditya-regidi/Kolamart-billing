@@ -42,8 +42,6 @@ type OrderPayload = {
 
 const ITEMS = {
   RICE_26KG: { label: 'Rice 26 KG', price: 1499 },
-  TOOR_DAL_500G: { label: 'Toor Dal 1/2 KG', price: 65 },
-  SUGAR_1KG: { label: 'Sugar 1 KG', price: 55 },
 };
 
 function formatOrderId(raw: any): string {
