@@ -220,6 +220,8 @@ export default function PosPage() {
   };
 
   async function tryPrintReceipt(orderId: string, payload: any) {
+    // Always capture a timestamp so Bluetooth print and PDF share show the same bill
+    const nowIso = new Date().toISOString();
     const orderObj = {
       orderId,
       workerId: payload.workerId,
@@ -230,6 +232,7 @@ export default function PosPage() {
       price: payload.price,
       total: payload.price * payload.quantity,
       paymentMode: payload.paymentMode,
+      date: nowIso,
     };
     if (getConnectedDevice()) {
       try {
@@ -257,7 +260,7 @@ export default function PosPage() {
 
     const divider = '-'.repeat(LINE_WIDTH);
 
-    const companyName = 'KOLAMART';
+    const companyName = (orderObj.companyName || 'KOLAMART').toString();
     const gstNumber = '37AALCK4778K1ZQ';
     const orderIdLocal = (orderObj.orderId || '').toString();
     const workerIdLocal = (orderObj.workerId || '').toString();
@@ -268,6 +271,18 @@ export default function PosPage() {
     const price = (orderObj.price ?? '').toString();
     const total = (orderObj.total ?? '').toString();
     const paymentModeLocal = (orderObj.paymentMode || '').toString();
+
+    const orderDate = orderObj.date ? new Date(orderObj.date) : new Date();
+    const formattedDate = orderDate.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+    const formattedTime = orderDate.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
 
     const COL_ITEM = 16;
     const COL_QTY = 3;
@@ -301,6 +316,8 @@ export default function PosPage() {
       '13/1, MIG Vuda Flats Pithapuram Colony, Visakhapatnam, Andhra Pradesh 530003\n';
     text += 'Customer Care: 9848418582\n';
     text += divider + '\n';
+    text += `Date         : ${formattedDate}\n`;
+    text += `Time         : ${formattedTime}\n`;
     if (orderIdLocal) {
       text += `Order ID    : ${orderIdLocal}\n`;
     }
@@ -318,7 +335,7 @@ export default function PosPage() {
     text += `TOTAL AMOUNT: Rs ${total}\n`;
     text += `Payment Mode: ${paymentModeLocal}\n`;
     text += divider + '\n';
-    text += 'You saved Rs 201/- per rice bag\n';
+    text += 'You saved Rs 300/- per rice bag\n';
     text += 'Thank you\n';
     text += 'Visit Again\n';
 
@@ -493,6 +510,7 @@ export default function PosPage() {
                 price,
                 total: price * quantity,
                 paymentMode,
+                date: new Date().toISOString(),
               };
               generatePrintableAndOpen(orderObj);
             }}
