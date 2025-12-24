@@ -169,14 +169,12 @@ export function buildReceipt(order: any) {
   receipt += `Phone        : ${customerPhone}\n`;
   receipt += divider + '\n';
 
-  // Item table (box format)
   receipt += headerBorder + '\n';
   receipt += tableHeader + '\n';
   receipt += headerBorder + '\n';
   receipt += itemRow + '\n';
   receipt += headerBorder + '\n';
 
-  // Total section (bold)
   receipt += ESC + 'E' + '\x01';
   receipt += `TOTAL AMOUNT: Rs ${total}\n`;
   receipt += ESC + 'E' + '\x00';
