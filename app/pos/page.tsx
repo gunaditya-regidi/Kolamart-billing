@@ -548,7 +548,7 @@ export default function PosPage() {
           <button
             className="btn btn-ghost"
             style={{padding:'12px 14px'}}
-            onClick={() => {
+            onClick={async () => {
               const payload: OrderPayload = {
                 workerId,
                 customerName,
@@ -558,15 +558,49 @@ export default function PosPage() {
                 quantity,
                 paymentMode,
               };
-              // If the form matches the last printed receipt AND that receipt isn't a draft, reuse its orderId/date.
-              if (lastReceipt && isSameDetails(lastReceipt, buildReceiptFromPayload(lastReceipt.orderId, payload, lastReceipt.date))) {
-                generatePrintableAndOpen(lastReceipt);
+
+              // If the form matches the last printed/saved receipt, reuse its real orderId/date.
+              if (
+                lastReceipt &&
+                isSameDetails(
+                  lastReceipt,
+                  buildReceiptFromPayload(lastReceipt.orderId, payload, lastReceipt.date)
+                )
+              ) {
+                await generatePrintableAndOpen(lastReceipt);
                 return;
               }
-              const orderId = `DRAFT-${Date.now()}`;
-              const orderObj = buildReceiptFromPayload(orderId, payload);
-              setLastReceipt(orderObj);
-              generatePrintableAndOpen(orderObj);
+
+              // Otherwise, save the order first so we get a real orderId from the backend,
+              // then open the PDF using that returned ID.
+              try {
+                const result = await submitOrder(payload);
+
+                if (result.success) {
+                  const rawOrderId =
+                    (result as any).orderId ??
+                    (result as any).order_id ??
+                    (result as any).orderID ??
+                    (result as any).id ??
+                    (result as any).data?.orderId ??
+                    (result as any).data?.order_id;
+
+                  const displayId = formatOrderId(rawOrderId);
+                  const orderObj = buildReceiptFromPayload(displayId, payload);
+                  setLastReceipt(orderObj);
+                  await generatePrintableAndOpen(orderObj);
+                } else {
+                  const msg = result?.error || result?.message || JSON.stringify(result);
+                  alert(`Failed to save order for PDF: ${msg}`);
+                }
+              } catch (err) {
+                console.error(err);
+                alert(
+                  `Network error while saving for PDF: ${
+                    err instanceof Error ? err.message : String(err)
+                  }`
+                );
+              }
             }}
           >
             Print / Share
