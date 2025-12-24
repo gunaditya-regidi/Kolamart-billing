@@ -158,7 +158,16 @@ export default function PosPage() {
       const result = await submitOrder(payload);
 
       if (result.success) {
-        const displayId = formatOrderId(result.orderId);
+        // Support multiple possible response shapes from Apps Script
+        const rawOrderId =
+          (result as any).orderId ??
+          (result as any).order_id ??
+          (result as any).orderID ??
+          (result as any).id ??
+          (result as any).data?.orderId ??
+          (result as any).data?.order_id;
+
+        const displayId = formatOrderId(rawOrderId);
         alert(`Order Saved\nOrder ID: ${displayId}`);
 
         // Print the saved order (use payload + server orderId)
