@@ -51,7 +51,6 @@ function formatOrderId(raw: any): string {
   return s || 'KM-0000001';
 }
 
-// Extract order ID from API response - ensures consistent extraction across all buttons
 function extractOrderIdFromResponse(result: any): string {
   const rawOrderId =
     result?.orderId ??
@@ -118,6 +117,7 @@ export default function PosPage() {
   const [bluetoothAvailable, setBluetoothAvailable] = useState<boolean>(true);
   const [secureContext, setSecureContext] = useState<boolean>(true);
   const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
+  const [upiImageError, setUpiImageError] = useState<boolean>(false);
   const toast = useToast();
 
   /* LOAD WORKER */
@@ -144,6 +144,13 @@ export default function PosPage() {
   useEffect(() => {
     setPrice(ITEMS[item].price);
   }, [item]);
+
+  /* Reset UPI image error when payment mode changes */
+  useEffect(() => {
+    if (paymentMode !== 'UPI') {
+      setUpiImageError(false);
+    }
+  }, [paymentMode]);
 
   const totalAmount = price * quantity;
 
@@ -578,6 +585,46 @@ export default function PosPage() {
           <option value="COD">COD</option>
         </select>
 
+        {/* Show UPI QR Code when UPI payment mode is selected */}
+        {paymentMode === 'UPI' && (
+          <div style={{
+            marginBottom: 16,
+            padding: 16,
+            backgroundColor: '#f9f9f9',
+            borderRadius: 8,
+            border: '1px solid #e0e0e0',
+            textAlign: 'center'
+          }}>
+            <div style={{ marginBottom: 8, fontWeight: 600, color: '#333' }}>
+              Scan QR Code to Pay
+            </div>
+            {!upiImageError ? (
+              <div style={{ position: 'relative', display: 'inline-block', maxWidth: '100%' }}>
+                <img
+                  src="/upi-qr.jpeg"
+                  alt="UPI QR Code"
+                  style={{
+                    maxWidth: '100%',
+                    height: 'auto',
+                    maxHeight: '300px',
+                    borderRadius: 8,
+                    border: '2px solid #fff',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  }}
+                  onError={() => setUpiImageError(true)}
+                />
+              </div>
+            ) : (
+              <div style={{ padding: '20px', color: '#666', textAlign: 'center' }}>
+                Please add your UPI QR code image as{' '}
+                <code style={{ background: '#f0f0f0', padding: '2px 6px', borderRadius: '3px' }}>
+                  /public/upi-qr.jpeg
+                </code>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ marginBottom: 12 }}>
           <div style={{ marginBottom: 8 }}>
             <strong>Printer:</strong>{' '}
@@ -659,7 +706,7 @@ export default function PosPage() {
               await generatePrintableAndOpen(orderObj);
             }}
           >
-            Print / Share
+            Share Receipt
           </button>
         </div>
 
