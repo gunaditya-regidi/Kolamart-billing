@@ -639,7 +639,8 @@ export default function PosPage() {
                 paymentMode,
               };
 
-              // If the form matches the last printed/saved receipt, reuse its real orderId/date.
+              // If the form matches the last printed/saved receipt, reuse its orderId/date.
+              // This allows re-printing a previously saved receipt without creating a new draft.
               if (
                 lastReceipt &&
                 isSameDetails(
@@ -651,30 +652,12 @@ export default function PosPage() {
                 return;
               }
 
-              // Otherwise, save the order first so we get a real orderId from the backend,
-              // then open the PDF using that returned ID.
-              // Uses the same extraction logic as PRINT & SAVE to ensure identical order IDs.
-              try {
-                const result = await submitOrder(payload);
-
-                if (result.success) {
-                  // Extract order ID using shared helper - ensures same ID as Bluetooth receipt
-                  const displayId = extractOrderIdFromResponse(result);
-                  const orderObj = buildReceiptFromPayload(displayId, payload);
-                  setLastReceipt(orderObj);
-                  await generatePrintableAndOpen(orderObj);
-                } else {
-                  const msg = result?.error || result?.message || JSON.stringify(result);
-                  alert(`Failed to save order for PDF: ${msg}`);
-                }
-              } catch (err) {
-                console.error(err);
-                alert(
-                  `Network error while saving for PDF: ${
-                    err instanceof Error ? err.message : String(err)
-                  }`
-                );
-              }
+              // Generate a draft receipt for printing/sharing without saving to Google Sheets
+              // This is for preview/sharing purposes only - not saved to database
+              const draftOrderId = `DRAFT-${Date.now()}`;
+              const orderObj = buildReceiptFromPayload(draftOrderId, payload);
+              setLastReceipt(orderObj);
+              await generatePrintableAndOpen(orderObj);
             }}
           >
             Print / Share
