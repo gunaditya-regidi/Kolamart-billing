@@ -91,6 +91,16 @@ function validateCustomerInputs(name: string, phone: string): { valid: boolean; 
   return { valid: true };
 }
 
+// Show confirmation dialog before printing receipt
+function confirmBeforePrint(customerName: string, phoneNumber: string): boolean {
+  const message = `Please confirm customer details before printing:\n\n` +
+    `Customer Name: ${customerName}\n` +
+    `Phone Number: ${phoneNumber}\n\n` +
+    `Do you want to proceed with printing the receipt?`;
+  
+  return confirm(message);
+}
+
 export default function PosPage() {
   const router = useRouter();
 
@@ -184,6 +194,11 @@ export default function PosPage() {
 
     // Normalize phone number (remove any non-digits, should be 10 digits after validation)
     const normalizedPhone = phone.replace(/\D/g, '');
+
+    // Show confirmation dialog before printing
+    if (!confirmBeforePrint(customerName.trim(), normalizedPhone)) {
+      return; // User cancelled, don't proceed
+    }
 
     setLoading(true);
 
@@ -608,6 +623,11 @@ export default function PosPage() {
 
               // Normalize phone number (remove any non-digits, should be 10 digits after validation)
               const normalizedPhone = phone.replace(/\D/g, '');
+
+              // Show confirmation dialog before printing
+              if (!confirmBeforePrint(customerName.trim(), normalizedPhone)) {
+                return; // User cancelled, don't proceed
+              }
 
               const payload: OrderPayload = {
                 workerId,
