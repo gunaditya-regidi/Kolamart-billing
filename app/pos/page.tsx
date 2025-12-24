@@ -16,6 +16,30 @@ import {
 } from '@/lib/bluetoothPrinter';
 import { useToast } from '@/components/ToastProvider';
 
+type ReceiptData = {
+  orderId: string;
+  workerId: string | null;
+  customerName: string;
+  customerPhone: string;
+  item: string;
+  quantity: number;
+  price: number;
+  total: number;
+  paymentMode: string;
+  date: string;
+  companyName?: string;
+};
+
+type OrderPayload = {
+  workerId: string | null;
+  customerName: string;
+  phone: string;
+  item: string;
+  price: number;
+  quantity: number;
+  paymentMode: string;
+};
+
 const ITEMS = {
   RICE_26KG: { label: 'Rice 26 KG', price: 1499 },
   TOOR_DAL_500G: { label: 'Toor Dal 1/2 KG', price: 65 },
@@ -47,6 +71,7 @@ export default function PosPage() {
   const [permittedDevices, setPermittedDevices] = useState<any[]>([]);
   const [bluetoothAvailable, setBluetoothAvailable] = useState<boolean>(true);
   const [secureContext, setSecureContext] = useState<boolean>(true);
+  const [lastReceipt, setLastReceipt] = useState<ReceiptData | null>(null);
   const toast = useToast();
 
   /* LOAD WORKER */
@@ -84,6 +109,32 @@ export default function PosPage() {
     }
   };
 
+  const buildReceiptFromPayload = (orderId: string, payload: OrderPayload, dateIso?: string): ReceiptData => ({
+    orderId,
+    workerId: payload.workerId,
+    customerName: payload.customerName,
+    customerPhone: payload.phone,
+    item: payload.item,
+    quantity: payload.quantity,
+    price: payload.price,
+    total: payload.price * payload.quantity,
+    paymentMode: payload.paymentMode,
+    date: dateIso || new Date().toISOString(),
+  });
+
+  const isSameDetails = (a?: ReceiptData | null, b?: ReceiptData | null) => {
+    if (!a || !b) return false;
+    return (
+      a.workerId === b.workerId &&
+      a.customerName === b.customerName &&
+      a.customerPhone === b.customerPhone &&
+      a.item === b.item &&
+      a.quantity === b.quantity &&
+      a.price === b.price &&
+      a.paymentMode === b.paymentMode
+    );
+  };
+
   /* SAVE ORDER */
   const saveOrder = async () => {
     if (!customerName || !phone) {
@@ -94,7 +145,7 @@ export default function PosPage() {
     setLoading(true);
 
     try {
-      const payload = {
+      const payload: OrderPayload = {
         workerId,
         customerName,
         phone,
@@ -219,21 +270,10 @@ export default function PosPage() {
     }
   };
 
-  async function tryPrintReceipt(orderId: string, payload: any) {
+  async function tryPrintReceipt(orderId: string, payload: OrderPayload) {
     // Always capture a timestamp so Bluetooth print and PDF share show the same bill
-    const nowIso = new Date().toISOString();
-    const orderObj = {
-      orderId,
-      workerId: payload.workerId,
-      customerName: payload.customerName,
-      customerPhone: payload.phone,
-      item: payload.item,
-      quantity: payload.quantity,
-      price: payload.price,
-      total: payload.price * payload.quantity,
-      paymentMode: payload.paymentMode,
-      date: nowIso,
-    };
+    const orderObj = buildReceiptFromPayload(orderId, payload);
+    setLastReceipt(orderObj);
     if (getConnectedDevice()) {
       try {
         const text = buildReceipt(orderObj as any);
@@ -500,18 +540,23 @@ export default function PosPage() {
             className="btn btn-ghost"
             style={{padding:'12px 14px'}}
             onClick={() => {
-              const orderObj = {
-                orderId: 'DRAFT-' + Date.now(),
+              const payload: OrderPayload = {
                 workerId,
                 customerName,
-                customerPhone: phone,
+                phone,
                 item: ITEMS[item].label,
-                quantity,
                 price,
-                total: price * quantity,
+                quantity,
                 paymentMode,
-                date: new Date().toISOString(),
               };
+              // If the form matches the last printed receipt AND that receipt isn't a draft, reuse its orderId/date.
+              if (lastReceipt && isSameDetails(lastReceipt, buildReceiptFromPayload(lastReceipt.orderId, payload, lastReceipt.date))) {
+                generatePrintableAndOpen(lastReceipt);
+                return;
+              }
+              const orderId = `DRAFT-${Date.now()}`;
+              const orderObj = buildReceiptFromPayload(orderId, payload);
+              setLastReceipt(orderObj);
               generatePrintableAndOpen(orderObj);
             }}
           >
@@ -524,9 +569,6 @@ export default function PosPage() {
   );
 }
 
-/* ======================
-   STYLES
-   ====================== */
 const styles = {
   container: {
     minHeight: '100vh',
