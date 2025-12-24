@@ -53,6 +53,44 @@ function formatOrderId(raw: any): string {
   return s || 'KM-0000001';
 }
 
+// Extract order ID from API response - ensures consistent extraction across all buttons
+function extractOrderIdFromResponse(result: any): string {
+  const rawOrderId =
+    result?.orderId ??
+    result?.order_id ??
+    result?.orderID ??
+    result?.id ??
+    result?.data?.orderId ??
+    result?.data?.order_id;
+  return formatOrderId(rawOrderId);
+}
+
+// Validate customer name and phone number
+function validateCustomerInputs(name: string, phone: string): { valid: boolean; error?: string } {
+  // Check if customer name is provided
+  if (!name || name.trim().length === 0) {
+    return { valid: false, error: 'Customer name is required' };
+  }
+
+  // Check if phone number is provided
+  if (!phone || phone.trim().length === 0) {
+    return { valid: false, error: 'Phone number is required' };
+  }
+
+  // Check if phone number contains only digits
+  const phoneDigitsOnly = phone.replace(/\D/g, '');
+  if (phoneDigitsOnly.length !== phone.length) {
+    return { valid: false, error: 'Phone number must contain only numbers' };
+  }
+
+  // Check if phone number is exactly 10 digits
+  if (phoneDigitsOnly.length !== 10) {
+    return { valid: false, error: 'Phone number must be exactly 10 digits' };
+  }
+
+  return { valid: true };
+}
+
 export default function PosPage() {
   const router = useRouter();
 
@@ -137,18 +175,23 @@ export default function PosPage() {
 
   /* SAVE ORDER */
   const saveOrder = async () => {
-    if (!customerName || !phone) {
-      alert('Customer name and phone are required');
+    // Validate customer inputs
+    const validation = validateCustomerInputs(customerName, phone);
+    if (!validation.valid) {
+      alert(validation.error);
       return;
     }
+
+    // Normalize phone number (remove any non-digits, should be 10 digits after validation)
+    const normalizedPhone = phone.replace(/\D/g, '');
 
     setLoading(true);
 
     try {
       const payload: OrderPayload = {
         workerId,
-        customerName,
-        phone,
+        customerName: customerName.trim(),
+        phone: normalizedPhone,
         item: ITEMS[item].label,
         price,
         quantity,
@@ -158,16 +201,8 @@ export default function PosPage() {
       const result = await submitOrder(payload);
 
       if (result.success) {
-        // Support multiple possible response shapes from Apps Script
-        const rawOrderId =
-          (result as any).orderId ??
-          (result as any).order_id ??
-          (result as any).orderID ??
-          (result as any).id ??
-          (result as any).data?.orderId ??
-          (result as any).data?.order_id;
-
-        const displayId = formatOrderId(rawOrderId);
+        // Extract order ID using shared helper - ensures consistency with Print/Share button
+        const displayId = extractOrderIdFromResponse(result);
         alert(`Order Saved\nOrder ID: ${displayId}`);
 
         // Print the saved order (use payload + server orderId)
@@ -463,18 +498,33 @@ export default function PosPage() {
           <div className="hint" style={{marginBottom:8}}>Web Bluetooth requires https or localhost. Please open in a secure context.</div>
         )}
 
-        <label style={styles.label}>Customer Name</label>
+        <label style={styles.label}>
+          Customer Name <span style={{color: '#d32f2f'}}>*</span>
+        </label>
         <input
           value={customerName}
           onChange={e => setCustomerName(e.target.value)}
           style={styles.input}
+          required
+          placeholder="Enter customer name"
         />
 
-        <label style={styles.label}>Phone Number</label>
+        <label style={styles.label}>
+          Phone Number <span style={{color: '#d32f2f'}}>*</span>
+        </label>
         <input
+          type="tel"
           value={phone}
-          onChange={e => setPhone(e.target.value)}
+          onChange={e => {
+            // Only allow digits, limit to 10 digits
+            const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+            setPhone(value);
+          }}
           style={styles.input}
+          required
+          placeholder="Enter 10-digit phone number"
+          maxLength={10}
+          pattern="[0-9]{10}"
         />
 
         <label style={styles.label}>Item</label>
@@ -549,10 +599,20 @@ export default function PosPage() {
             className="btn btn-ghost"
             style={{padding:'12px 14px'}}
             onClick={async () => {
+              // Validate customer inputs before proceeding
+              const validation = validateCustomerInputs(customerName, phone);
+              if (!validation.valid) {
+                alert(validation.error);
+                return;
+              }
+
+              // Normalize phone number (remove any non-digits, should be 10 digits after validation)
+              const normalizedPhone = phone.replace(/\D/g, '');
+
               const payload: OrderPayload = {
                 workerId,
-                customerName,
-                phone,
+                customerName: customerName.trim(),
+                phone: normalizedPhone,
                 item: ITEMS[item].label,
                 price,
                 quantity,
@@ -573,19 +633,13 @@ export default function PosPage() {
 
               // Otherwise, save the order first so we get a real orderId from the backend,
               // then open the PDF using that returned ID.
+              // Uses the same extraction logic as PRINT & SAVE to ensure identical order IDs.
               try {
                 const result = await submitOrder(payload);
 
                 if (result.success) {
-                  const rawOrderId =
-                    (result as any).orderId ??
-                    (result as any).order_id ??
-                    (result as any).orderID ??
-                    (result as any).id ??
-                    (result as any).data?.orderId ??
-                    (result as any).data?.order_id;
-
-                  const displayId = formatOrderId(rawOrderId);
+                  // Extract order ID using shared helper - ensures same ID as Bluetooth receipt
+                  const displayId = extractOrderIdFromResponse(result);
                   const orderObj = buildReceiptFromPayload(displayId, payload);
                   setLastReceipt(orderObj);
                   await generatePrintableAndOpen(orderObj);
