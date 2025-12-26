@@ -2,6 +2,7 @@
   "name": "km-sales-app",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,6 +11,11 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "cordova-plugin-android-permissions": "^1.1.5",
+    "cordova-plugin-bluetooth-serial": "^0.4.7",
     "next": "16.1.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"

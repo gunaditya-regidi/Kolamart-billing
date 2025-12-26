@@ -16,7 +16,7 @@ export default function HomePage() {
   useEffect(() => {
     const savedId = localStorage.getItem('workerId');
     if (savedId && ALLOWED_WORKERS.includes(savedId)) {
-      router.push('/pos');
+      router.push('/select');
     } else {
       localStorage.removeItem('workerId'); // clean invalid data
     }
@@ -31,7 +31,7 @@ export default function HomePage() {
     }
 
     localStorage.setItem('workerId', id);
-    router.push('/pos');
+    router.push('/select');
   };
 
   return (

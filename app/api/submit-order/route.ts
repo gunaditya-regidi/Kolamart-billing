@@ -37,10 +37,14 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
+    // If client sent an envelope { action, payload }, forward only payload
+    const forwardBody = body && body.payload ? body.payload : body;
+    console.info('submit-order: forwarding payload to Apps Script:', forwardBody);
+
     const res = await fetch(SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(forwardBody),
     });
 
     const text = await res.text();

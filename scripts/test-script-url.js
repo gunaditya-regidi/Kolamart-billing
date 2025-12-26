@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // Simple tester for the Google Apps Script exec URL used by the app.
-// Usage: copy .env.local.example -> .env.local, set NEXT_PUBLIC_SHEET_SCRIPT_URL, then run:
+// Usage: copy .env.local.example -> .env.local, set NEXT_PUBLIC_SHEET_SCRIPT_URL and NEXT_PUBLIC_SHEET_SCRIPT_URL_BILL, then run:
 //   node scripts/test-script-url.js
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 function loadLocalEnv(filePath) {
   try {
@@ -30,32 +30,55 @@ function loadLocalEnv(filePath) {
 }
 
 const env = loadLocalEnv(path.resolve(process.cwd(), '.env.local'));
-const url = process.env.NEXT_PUBLIC_SHEET_SCRIPT_URL || env.NEXT_PUBLIC_SHEET_SCRIPT_URL;
+// Test both order and bill script URLs
+const orderUrl = process.env.NEXT_PUBLIC_SHEET_SCRIPT_URL || env.NEXT_PUBLIC_SHEET_SCRIPT_URL;
+const billUrl = process.env.NEXT_PUBLIC_SHEET_SCRIPT_URL_BILL || env.NEXT_PUBLIC_SHEET_SCRIPT_URL_BILL;
 
-if (!url || url === 'REPLACE_WITH_YOUR_SCRIPT_EXEC_URL') {
-  console.error('Missing NEXT_PUBLIC_SHEET_SCRIPT_URL. Copy .env.local.example -> .env.local and set the exec URL.');
+if (!orderUrl || orderUrl === 'REPLACE_WITH_YOUR_ORDER_SCRIPT_EXEC_URL') {
+  console.error('Missing NEXT_PUBLIC_SHEET_SCRIPT_URL. Copy .env.local -> .env.local and set the exec URL.');
   process.exit(1);
 }
 
-(async () => {
+if (!billUrl || billUrl === 'REPLACE_WITH_YOUR_BILL_SCRIPT_EXEC_URL') {
+  console.error('Missing NEXT_PUBLIC_SHEET_SCRIPT_URL_BILL. Copy .env.local -> .env.local and set the exec URL.');
+  process.exit(1);
+}
+
+async function testUrl(url, type) {
   try {
-    const payload = { action: 'submitOrder', payload: { workerId: 'dev', customerName: 'Tester', phone: '000' } };
-    console.log('POSTing test payload to', url);
+    let payload;
+    if (type === 'order') {
+      payload = { action: 'submitOrder', payload: { workerId: 'dev', customerName: 'Tester', phone: '000' } };
+    } else {
+      payload = { action: 'submitBill', payload: { workerId: 'dev', customerName: 'Tester', phone: '000' } };
+    }
+    
+    console.log(`POSTing ${type} test payload to`, url);
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
     const text = await res.text();
-    console.log('Status:', res.status);
+    console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} Status:`, res.status);
     try {
-      console.log('JSON response:', JSON.parse(text));
+      console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} Response:`, JSON.parse(text));
     } catch (e) {
-      console.log('Text response (non-JSON):');
+      console.log(`${type.charAt(0).toUpperCase() + type.slice(1)} Response (non-JSON):`);
       console.log(text.slice(0, 2000));
     }
+    console.log('---');
+    return res.status;
   } catch (err) {
-    console.error('Request failed:', err && err.message ? err.message : err);
-    process.exit(1);
+    console.error(`Request failed for ${type}:`, err && err.message ? err.message : err);
+    return null;
   }
+}
+
+(async () => {
+  console.log('Testing order script URL...');
+  await testUrl(orderUrl, 'order');
+  
+  console.log('\nTesting bill script URL...');
+  await testUrl(billUrl, 'bill');
 })();

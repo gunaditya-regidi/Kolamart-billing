@@ -75,7 +75,7 @@ export async function printReceipt(text: string) {
   await writeChunks(data);
 }
 
-export function buildReceipt(order: any) {
+export function buildOrderReceipt(order: any) {
   const ESC = '\x1B';
   const GS = '\x1D';
   const LINE_WIDTH = 32;
@@ -89,7 +89,7 @@ export function buildReceipt(order: any) {
   const divider = '-'.repeat(LINE_WIDTH);
 
   const companyName = (order.companyName || 'KOLAMART').toString();
-  const orderId = (order.orderId || '').toString();
+  const orderId = (order.bookingId || order.orderId || '').toString();
   const workerId = (order.workerId || '').toString();
   const customerName = (order.customerName || '').toString();
   const customerPhone = (order.customerPhone || '').toString();
@@ -97,7 +97,6 @@ export function buildReceipt(order: any) {
   const quantity = (order.quantity ?? '').toString();
   const price = (order.price ?? '').toString();
   const total = (order.total ?? '').toString();
-  const paymentMode = (order.paymentMode || '').toString();
   
   // Format date - use order date if provided, otherwise use current date
   const orderDate = order.date ? new Date(order.date) : new Date();
@@ -154,15 +153,21 @@ export function buildReceipt(order: any) {
   receipt += 'Customer Care: 9848418582\n';
   receipt += divider + '\n';
 
+
   // Worker & customer details (left)
-  receipt += ESC + 'a' + '0';
+  // Add a larger, centered heading for booking copy above the date
+  receipt += ESC + 'a' + '1'; // center
+  receipt += GS + '!' + String.fromCharCode(17); // double height & width
+  receipt += `Order Booking\n Copy\n`;
+  receipt += GS + '!' + '\x00'; // reset size
+  receipt += ESC + 'a' + '0'; // back to left
   receipt += `Date        : ${formattedDate}\n`;
   receipt += `Time        : ${formattedTime}\n`;
   if (orderId) {
-    receipt += `Order ID    : ${orderId}\n`;
+    receipt += `Booking ID  : ${orderId}\n`;
   }
   if (workerId) {
-    receipt += `Worker ID    : ${workerId}\n`;
+    receipt += `Worker ID   : ${workerId}\n`;
   }
   
   receipt += `Customer Name: ${customerName}\n`;
@@ -180,20 +185,117 @@ export function buildReceipt(order: any) {
   receipt += ESC + 'E' + '\x00';
 
   // Payment details
-  receipt += `Payment Mode: ${paymentMode}\n`;
+  receipt += `Payment Mode: COD by UPI/Cash\n`;
   receipt += divider + '\n';
 
   // Savings & footer (center)
   receipt += ESC + 'a' + '1';
-  receipt += 'You saved Rs 300/- per rice bag\n';
+  receipt += 'You will save Rs 300/- per rice bag\n';
   receipt += 'Thank you\n';
-  receipt += 'Visit Again\n';
+  receipt += 'Order Again\n';
 
   // Feed exactly 2 extra blank lines after the footer, then stop (no cut)
   receipt += ESC + 'd' + '\x02';
 
   return receipt;
 }
+
+// Bill/POS receipt format (different from order booking)
+export function buildBillReceipt(order: any) {
+  const ESC = '\x1B';
+  const GS = '\x1D';
+  const LINE_WIDTH = 32;
+
+  const padRight = (text: string, length: number) =>
+    text.length > length ? text.slice(0, length) : text + ' '.repeat(length - text.length);
+
+  const padLeft = (text: string, length: number) =>
+    text.length > length ? text.slice(0, length) : ' '.repeat(length - text.length) + text;
+
+  const divider = '-'.repeat(LINE_WIDTH);
+
+  const companyName = (order.companyName || 'KOLAMART').toString();
+  const orderId = (order.orderId || order.bookingId || '').toString();
+  const workerId = (order.workerId || '').toString();
+  const customerName = (order.customerName || '').toString();
+  const customerPhone = (order.customerPhone || '').toString();
+  const itemName = (order.item || '').toString();
+  const quantity = (order.quantity ?? '').toString();
+  const price = (order.price ?? '').toString();
+  const total = (order.total ?? '').toString();
+  const paymentMode = (order.paymentMode || 'Cash').toString();
+
+  const orderDate = order.date ? new Date(order.date) : new Date();
+  const formattedDate = orderDate.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const formattedTime = orderDate.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  const COL_ITEM = 16;
+  const COL_QTY = 3;
+  const COL_PRICE = 9;
+
+  const headerBorder =
+    '+' + '-'.repeat(COL_ITEM) + '+' + '-'.repeat(COL_QTY) + '+' + '-'.repeat(COL_PRICE) + '+';
+
+  const tableHeader =
+    '|' + padRight('ITEM', COL_ITEM) + '|' + padRight('QTY', COL_QTY) + '|' + padRight('PRICE', COL_PRICE) + '|';
+
+  const itemRow =
+    '|' + padRight(itemName, COL_ITEM) + '|' + padRight(quantity, COL_QTY) + '|' + padLeft(`Rs ${price}`, COL_PRICE) + '|';
+
+  let receipt = '';
+
+  // Header
+  receipt += ESC + '@';
+  receipt += ESC + 'a' + '1'; // center
+  receipt += GS + '!' + String.fromCharCode(17); // double height & width
+  receipt += companyName + '\n';
+  receipt += GS + '!' + '\x00';
+  receipt += `GST No: 37AALCK4778K1ZQ\n`;
+  receipt += '13/1, MIG Vuda Flats Pithapuram Colony, Visakhapatnam,\n Andhra Pradesh, India - 530003\n';
+  receipt += 'Customer Care: 9848418582\n';
+  receipt += divider + '\n';
+
+  // Left details
+  receipt += ESC + 'a' + '0';
+  receipt += `Date        : ${formattedDate}\n`;
+  receipt += `Time        : ${formattedTime}\n`;
+  if (orderId) receipt += `Order ID    : ${orderId}\n`;
+  if (workerId) receipt += `Worker ID   : ${workerId}\n`;
+  receipt += `Customer Name: ${customerName}\n`;
+  receipt += `Phone        : ${customerPhone}\n`;
+  receipt += divider + '\n';
+
+  receipt += headerBorder + '\n';
+  receipt += tableHeader + '\n';
+  receipt += headerBorder + '\n';
+  receipt += itemRow + '\n';
+  receipt += headerBorder + '\n';
+
+  receipt += ESC + 'E' + '\x01';
+  receipt += `TOTAL AMOUNT: Rs ${total}\n`;
+  receipt += ESC + 'E' + '\x00';
+
+  receipt += `Payment Mode: ${paymentMode}\n`;
+  receipt += divider + '\n';
+
+  receipt += ESC + 'a' + '1';
+  receipt += 'Thank you\n';
+  receipt += 'Visit Again\n';
+  receipt += ESC + 'd' + '\x02';
+
+  return receipt;
+}
+
+// Backwards compatible default export name
+export const buildReceipt = buildBillReceipt;
 
 async function writeChunks(data: Uint8Array) {
   if (!characteristic) throw new Error('Printer not connected');
